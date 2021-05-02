@@ -10,7 +10,7 @@ from torchtext.legacy import data
 import torch.nn as nn
 
 # Setting random seeds
-SEED = 1234
+SEED = 43
 random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
@@ -25,7 +25,7 @@ class Hyperparams(object):
   n_layers = 2
   bidirectional = True
   dropout = 0.25
-  n_epochs = 1000
+  n_epochs = 100
   batch_size = 128
 
 
@@ -49,36 +49,25 @@ def tokenize_and_cut(tokenizer, cut_idx, sentence):
   return tokens
 
 
-def get_fields(tokenizer):
+def my_dataset_stuff(device, tokenizer):
+
   metadata = TokenizerMetadata(tokenizer)
-  TEXT = data.Field(batch_first=True,
-                    use_vocab=False,
-                    tokenize=lambda x: tokenize_and_cut(
-                        tokenizer, metadata.max_input_length - 2, x),
-                    preprocessing=tokenizer.convert_tokens_to_ids,
-                    init_token=metadata.init_token_idx,
-                    eos_token=metadata.eos_token_idx,
-                    pad_token=metadata.pad_token_idx,
-                    unk_token=metadata.unk_token_idx)
+
+  RAW = data.RawField()
+  TEXT = data.Field(
+      use_vocab=False,
+      batch_first=True,
+      tokenize=lambda x: tokenize_and_cut(tokenizer,
+        metadata.max_input_length - 2, x),
+      preprocessing = tokenizer.convert_tokens_to_ids,
+      init_token = metadata.init_token_idx,
+      eos_token = metadata.eos_token_idx,
+      pad_token = metadata.pad_token_idx,
+      unk_token = metadata.unk_token_idx
+      
+  )
   LABEL = data.LabelField(dtype=torch.float)
-  return TEXT, LABEL
 
-
-RAW = data.RawField()
-TEXT = data.Field(
-    sequential=True,
-    init_token='',  # start of sequence
-    eos_token='',  # end of sequence
-    lower=True,
-    tokenize=data.utils.get_tokenizer("basic_english"),
-)
-LABEL = data.Field(sequential=False,
-                   use_vocab=False,
-                   unk_token=None,
-                   is_target=True)
-
-
-def my_dataset_stuff(device):
   (train_obj, valid_obj, test_obj) = \
     data.TabularDataset.splits(
     path="./data/",
@@ -90,25 +79,29 @@ def my_dataset_stuff(device):
       ('label', LABEL)])
 
   TEXT.build_vocab(train_obj)
+  LABEL.build_vocab(train_obj)
 
-  train_iter = data.BucketIterator(dataset=train_obj,
-                                   batch_size=2,
-                                   sort_key=lambda x: len(x.review),
-                                   shuffle=True,
-                                   device=device)
+  train_iterator, valid_iterator, test_iterator = data.BucketIterator.splits(
+      (train_obj, valid_obj, test_obj),
+      batch_size=Hyperparams.batch_size,
+      device=device,
+      sort_key=lambda x: x.id,
+      sort_within_batch=False
+      )
 
-  return train_obj, valid_obj, test_obj, train_iter
+  return train_iterator, valid_iterator, test_iterator
 
 
 class BERTGRUSentiment(nn.Module):
 
-  def __init__(self, bert):
+  def __init__(self, device):
 
     super().__init__()
 
-    self.bert = bert
+    self.bert = BertModel.from_pretrained('bert-base-uncased')
+    self.device = device
     self.rnn = nn.GRU(
-        bert.config.to_dict()['hidden_size'],
+        self.bert.config.to_dict()['hidden_size'],
         Hyperparams.hidden_dim,
         num_layers=Hyperparams.n_layers,
         bidirectional=Hyperparams.bidirectional,
@@ -116,15 +109,20 @@ class BERTGRUSentiment(nn.Module):
         dropout=0 if Hyperparams.n_layers < 2 else Hyperparams.dropout)
 
     self.out = nn.Linear(
-        Hyperparams.hidden_dim, Hyperparams.output_dim *
-        2 if Hyperparams.bidirectional else Hyperparams.output_dim)
+        Hyperparams.hidden_dim *
+        2 if Hyperparams.bidirectional else Hyperparams.hidden_dim,
+        Hyperparams.output_dim)
     self.dropout = nn.Dropout(Hyperparams.dropout)
+
+    for name, param in self.named_parameters():
+      if name.startswith('bert'):
+        param.requires_grad = False
 
   def forward(self, text):
     #text = [batch size, sent len]
 
     with torch.no_grad():
-      embedded = self.bert(torch.transpose(text, 0, 1))[0]
+      embedded = self.bert(text)[0]
       #embedded = [batch size, sent len, emb dim]
 
     _, hidden = self.rnn(embedded)
@@ -156,10 +154,10 @@ def binary_accuracy(preds, y):
 
 
 def loss_acc_wrapper(batch, predictions, criterion):
+  new_label = torch.tensor([logit_lookup[int(i)] for i in batch.label
+                             ]).to(predictions.device)
   return (criterion(
-      predictions,
-      torch.tensor([logit_lookup[i] for i in batch.label
-                   ]).to(predictions.device)),
+      predictions, new_label),
           binary_accuracy(predictions, batch.label))
 
 
@@ -185,7 +183,6 @@ def train_or_evaluate(model,
 
   with context:
     for batch in iterator:
-      print(train_or_evaluate, len(batch))
       example_counter += len(batch)
       if is_train:
         optimizer.zero_grad()
@@ -214,26 +211,13 @@ def main():
 
   tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-  train_obj, valid_obj, test_obj, train_iter = my_dataset_stuff(device)
-  LABEL.build_vocab(train_obj)
-  train_iterator, valid_iterator, test_iterator = data.BucketIterator.splits(
-      (train_obj, valid_obj, test_obj),
-      batch_size=Hyperparams.batch_size,
-      device=device,
-      sort_key=lambda x: x.id,
-      sort_within_batch=False)
+  #logit_lookup.to(device)
+  train_iterator, valid_iterator, test_iterator = my_dataset_stuff(
+      device, tokenizer)
 
-  bert = BertModel.from_pretrained('bert-base-uncased')
-  model = BERTGRUSentiment(bert)
-
-  for name, param in model.named_parameters():
-    if name.startswith('bert'):
-      param.requires_grad = False
-
+  model = BERTGRUSentiment(device).to(device)
   optimizer = optim.Adam(model.parameters())
   criterion = nn.BCEWithLogitsLoss()
-
-  model = model.to(device)
 
   best_valid_loss = float('inf')
 
