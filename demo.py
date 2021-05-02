@@ -73,7 +73,7 @@ LABEL = data.Field(sequential=False,
 def my_dataset_stuff():
   (train_obj, valid_obj, test_obj) = \
     data.TabularDataset.splits(
-    path="./",
+    path="./data/",
     train='train_data.csv',
     validation='valid_data.csv',
     test='test_data.csv',
@@ -102,7 +102,6 @@ class BERTGRUSentiment(nn.Module):
 
     super().__init__()
 
-    print("Output dim", output_dim)
 
     self.bert = bert
     embedding_dim = bert.config.to_dict()['hidden_size']
@@ -119,9 +118,6 @@ class BERTGRUSentiment(nn.Module):
 
   def forward(self, text):
     #text = [batch size, sent len]
-    print("Shape of text")
-    print(text.shape)
-    print(text)
 
     with torch.no_grad():
       embedded = self.bert(torch.transpose(text, 0, 1))[0]
@@ -166,8 +162,6 @@ def train(model, iterator, optimizer, criterion):
         
         optimizer.zero_grad()
 
-        print(batch)
-        
         predictions = model(batch.review).squeeze(1)
         labels = sigmoidize_labels(batch, predictions)               
         loss = criterion(predictions, labels)
@@ -236,9 +230,6 @@ def main():
       (train_obj, valid_obj, test_obj), batch_size=BATCH_SIZE, device=device,
       sort_key = lambda x:x.id, sort_within_batch=False)
 
-  for i in train_iterator:
-    print(i.label)
-
   bert = BertModel.from_pretrained('bert-base-uncased')
   HIDDEN_DIM = 256
   OUTPUT_DIM = 2
@@ -256,11 +247,10 @@ def main():
   optimizer = optim.Adam(model.parameters())
   criterion = nn.BCEWithLogitsLoss()
 
-  print(device)
   model = model.to(device)
   criterion = criterion.to(device)
 
-  N_EPOCHS = 5
+  N_EPOCHS = 1000
 
   best_valid_loss = float('inf')
 
