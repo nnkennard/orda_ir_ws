@@ -54,18 +54,15 @@ def my_dataset_stuff(device, tokenizer):
   metadata = TokenizerMetadata(tokenizer)
 
   RAW = data.RawField()
-  TEXT = data.Field(
-      use_vocab=False,
-      batch_first=True,
-      tokenize=lambda x: tokenize_and_cut(tokenizer,
-        metadata.max_input_length - 2, x),
-      preprocessing = tokenizer.convert_tokens_to_ids,
-      init_token = metadata.init_token_idx,
-      eos_token = metadata.eos_token_idx,
-      pad_token = metadata.pad_token_idx,
-      unk_token = metadata.unk_token_idx
-      
-  )
+  TEXT = data.Field(use_vocab=False,
+                    batch_first=True,
+                    tokenize=lambda x: tokenize_and_cut(
+                        tokenizer, metadata.max_input_length - 2, x),
+                    preprocessing=tokenizer.convert_tokens_to_ids,
+                    init_token=metadata.init_token_idx,
+                    eos_token=metadata.eos_token_idx,
+                    pad_token=metadata.pad_token_idx,
+                    unk_token=metadata.unk_token_idx)
   LABEL = data.LabelField(dtype=torch.float)
 
   (train_obj, valid_obj, test_obj) = \
@@ -86,8 +83,7 @@ def my_dataset_stuff(device, tokenizer):
       batch_size=Hyperparams.batch_size,
       device=device,
       sort_key=lambda x: x.id,
-      sort_within_batch=False
-      )
+      sort_within_batch=False)
 
   return train_iterator, valid_iterator, test_iterator
 
@@ -155,10 +151,9 @@ def binary_accuracy(preds, y):
 
 def loss_acc_wrapper(batch, predictions, criterion):
   new_label = torch.tensor([logit_lookup[int(i)] for i in batch.label
-                             ]).to(predictions.device)
-  return (criterion(
-      predictions, new_label),
-          binary_accuracy(predictions, batch.label))
+                           ]).to(predictions.device)
+  return (criterion(predictions,
+                    new_label), binary_accuracy(predictions, batch.label))
 
 
 def train_or_evaluate(model,
