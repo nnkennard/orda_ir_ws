@@ -37,7 +37,8 @@ def generate_text_field(tokenizer):
                     unk_token=metadata.unk_token_idx)
 
 
-TEXT_FIELD_NAMES = "d1 d2 q".split()
+#TEXT_FIELD_NAMES = "d1 d2 q".split()
+TEXT_FIELD_NAMES = ["text"]
 
 class DatasetTools(object):
 

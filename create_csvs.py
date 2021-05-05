@@ -23,7 +23,8 @@ random.seed(34)
 POS = "1_more_relevant"
 NEG = "2_more_relevant"
 
-FIELDS = "id label d1 d2 q".split()
+#FIELDS = "id label d1 d2 q".split()
+FIELDS = "id label text".split()
 
 
 def bernoulli(mean):
@@ -74,10 +75,17 @@ def main():
           continue
         else:
           sample_starter = {
-              "d1": data_obj["review"][rev_i],
-              "d2": data_obj["review"][rev_j],
-              "q": data_obj["rebuttal"][reb_i],
-              "id": len(samples)
+              #"d1": data_obj["review"][rev_i],
+              #"d2": data_obj["review"][rev_j],
+              #"q": data_obj["rebuttal"][reb_i],
+              "text":
+                  " [SEP] ".join([
+                      data_obj["review"][rev_i],
+                      data_obj["review"][rev_j],
+                      data_obj["rebuttal"][reb_i],
+                  ]),
+              "id":
+                  len(samples)
           }
           if score_1 > score_2:
             sample_starter["label"] = POS
@@ -112,7 +120,12 @@ def main():
         ])):
       if i == stop_len:
         break
-      writer.writerow({"id": i, "d1": d1, "d2": d2, "q": q, "label": label})
+      writer.writerow({
+          "id": i,
+          # "d1": d1, "d2": d2, "q": q,
+          "text": " [SEP] ".join([d1, d2, q]),
+          "label": label
+      })
 
 
 if __name__ == "__main__":

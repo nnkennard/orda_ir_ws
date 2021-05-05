@@ -40,7 +40,7 @@ def get_sentences_from_comment(comment_text):
 
 def main():
 
-  data_dir = "data/data_0.1/"
+  data_dir = "data/data_0.1.3/"
   output_dir = data_dir + "/ws/"
   dir_fix(output_dir)
 
@@ -58,7 +58,7 @@ def main():
     with open(input_file, 'r') as f:
       obj = json.load(f)
 
-    for pair in tqdm(obj["review_rebuttal_pairs"][:150]):
+    for pair in tqdm(obj["review_rebuttal_pairs"]):
       # Collect sentences
       key = (dataset, str(pair["index"]))
       review_map[key] = get_sentences_from_comment(pair["review_text"])

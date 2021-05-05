@@ -115,24 +115,24 @@ class BERTGRUSentiment(nn.Module):
         param.requires_grad = False
 
   def forward(self, text):
-    #text = [batch size, sent len]
+    #text ~ [batch size, sent len]
 
     with torch.no_grad():
       embedded = self.bert(text)[0]
-      #embedded = [batch size, sent len, emb dim]
+      #embedded ~ [batch size, sent len, emb dim]
 
     _, hidden = self.rnn(embedded)
-    #hidden = [n layers * n directions, batch size, emb dim]
+    #hidden ~ [n layers * n directions, batch size, emb dim]
 
     if self.rnn.bidirectional:
       hidden = self.dropout(
           torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1))
     else:
       hidden = self.dropout(hidden[-1, :, :])
-      #hidden = [batch size, hid dim]
+      #hidden ~ [batch size, hid dim]
 
     output = self.out(hidden)
-    #output = [batch size, out dim]
+    #output ~ [batch size, out dim]
 
     return output
 
