@@ -76,13 +76,15 @@ def main():
   model = BM25Okapi(corpus)
 
   for key, preprocessed_queries in tqdm(queries.items()):
+    filename = "".join([output_dir, "/", "_".join(key), ".json"])
+    if os.path.exists(filename):
+      continue
     relevant_scores = []
     for j, preprocessed_query in enumerate(preprocessed_queries):
       scores = model.get_scores(preprocessed_query)
       start, exclusive_end = corpus_index_map[key]
       blerp = scores[start:exclusive_end].tolist()
       relevant_scores.append(blerp)
-    filename = "".join([output_dir, "/", "_".join(key), ".json"])
     with open(filename, "w") as f:
       json.dump({"review": review_map[key],
                  "rebuttal": rebuttal_map[key],

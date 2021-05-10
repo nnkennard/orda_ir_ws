@@ -203,7 +203,7 @@ def main():
   criterion = nn.BCEWithLogitsLoss()
 
   for epoch in range(Hyperparams.n_epochs):
-    for train_file in tqdm(sorted(glob.glob(args.datadir+"/*train_*.csv"))):
+    for train_file in tqdm(sorted(glob.glob(args.datadir+"/*train.csv"))):
       train_file_name = train_file.split('/')[-1]
 
       train_iterator, valid_iterator, = ws_lib.build_iterators(
