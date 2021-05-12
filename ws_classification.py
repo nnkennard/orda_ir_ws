@@ -17,7 +17,7 @@ import ws_lib
 parser = argparse.ArgumentParser(description='prepare CSVs for ws training')
 parser.add_argument('-d',
                     '--datadir',
-                    default="data/data_0.1/ws/",
+                    default="data/data_0.1.3/ws/",
                     type=str,
                     help='path to data file containing score jsons')
 
@@ -204,6 +204,7 @@ def main():
 
   for epoch in range(Hyperparams.n_epochs):
     for train_file in tqdm(sorted(glob.glob(args.datadir+"/*train.csv"))):
+      print(train_file)
       train_file_name = train_file.split('/')[-1]
 
       train_iterator, valid_iterator, = ws_lib.build_iterators(
@@ -212,7 +213,6 @@ def main():
       this_epoch_data = do_epoch(model, train_iterator, criterion, optimizer,
           valid_iterator)
 
-      print(train_file)
       report_epoch(epoch, this_epoch_data)
 
       #if this_epoch_data.val_loss < best_valid_loss:

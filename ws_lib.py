@@ -62,10 +62,12 @@ def get_dataset_tools(data_dir):
 
   # Create fake train obj
 
+  print("Creating temp object")
   temp_obj, = data.TabularDataset.splits(
       path=data_dir, train='overall_dummy_vocabber.csv',
       format='csv', fields=fields, skip_header=True)
   for name, field in fields:
+    print("Creating vocab for ", name)
     if name in ['id']:
       continue
     field.build_vocab(temp_obj)
