@@ -1,26 +1,15 @@
-import collections
 import csv
+import torch.nn as nn
+import pickle
+import sys
 import glob
 import json
-import os
-import sys
 import torch
-
+import collections
+import classification_lib
 from torchtext.legacy import data
 from transformers import BertTokenizer
-
 import torch.optim as optim
-import torch.nn as nn
-import ws_lib
-import simple_classification
-import ws_classification
-
-TOKEN_LABEL_FIELD = data.Field(
-    use_vocab=False,
-    batch_first=True,
-    tokenize=lambda x: x.split(),
-    #preprocessing=tokenizer.convert_tokens_to_ids,
-)
 
 
 class LabelSet(object):
@@ -83,7 +72,6 @@ def build_iterators(data_dir, batch_size):
   # Form csv files
   offset = 0
   for subset in Subset.ALL:
-    continue
     glob_path = "/".join([data_dir, "traindev_" + subset, "*.json"])
     review_sentence_examples = []
     rebuttal_sentence_examples = []
@@ -103,88 +91,81 @@ def build_iterators(data_dir, batch_size):
 
   tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-  metadata = ws_lib.TokenizerMetadata(tokenizer)
+  metadata = classification_lib.TokenizerMetadata(tokenizer)
 
   RAW = data.RawField()
-  TEXT = data.Field(use_vocab=True,
-                    batch_first=True,
-                    tokenize=lambda x: ws_lib.tokenize_and_cut(
-                        tokenizer, metadata.max_input_length - 2, x),
-                    #preprocessing=tokenizer.convert_tokens_to_ids,
-                    init_token=metadata.init_token_idx,
-                    eos_token=metadata.eos_token_idx,
-                    pad_token=metadata.pad_token_idx,
-                    unk_token=metadata.unk_token_idx)
+  TEXT = data.Field(
+      use_vocab=True,
+      batch_first=True,
+      tokenize=lambda x: classification_lib.tokenize_and_cut(
+          tokenizer, metadata.max_input_length - 2, x),
+      #preprocessing=tokenizer.convert_tokens_to_ids,
+      init_token=metadata.init_token_idx,
+      eos_token=metadata.eos_token_idx,
+      pad_token=metadata.pad_token_idx,
+      unk_token=metadata.unk_token_idx)
   label_fields = [(field_name,
-    data.LabelField(dtype=torch.int, use_vocab=True, sequential=False) )
-      for field_name in LabelSet.REVIEW_LABELS]
+                   data.LabelField(dtype=torch.int,
+                                   use_vocab=True,
+                                   sequential=False))
+                  for field_name in LabelSet.REVIEW_LABELS]
 
   fields = [('id', RAW), ('text', TEXT)] + label_fields[:1]
-  
-  temp_obj, = data.TabularDataset.splits(
-      path='./', train='for_vocab.csv',
-      format='csv', fields=fields, skip_header=True)
-  
+
   train_file_name = "".join([ExampleType.ReviewSentence, "_train.csv"])
   train_obj, valid_obj, test_obj = data.TabularDataset.splits(
       path="./",
       train=train_file_name,
       validation=train_file_name.replace("_train.", "_dev."),
       test=train_file_name.replace("_train.", "_test."),
-      format='csv', skip_header=True,
+      format='csv',
+      skip_header=True,
       fields=fields)
 
   for name, field in fields:
     if name in ['id']:
       continue
-    #field.build_vocab(temp_obj)
     field.build_vocab(train_obj, valid_obj, test_obj)
 
   return (data.BucketIterator.splits((train_obj, valid_obj, test_obj),
-                                    batch_size=batch_size,
-                                    device=device,
-                                    sort_key=lambda x: x.id,
-                                    sort_within_batch=False),
-          ws_lib.DatasetTools(tokenizer, device, metadata, dict(fields)))
+                                     batch_size=batch_size,
+                                     device=device,
+                                     sort_key=lambda x: x.id,
+                                     sort_within_batch=False),
+          classification_lib.DatasetTools(tokenizer, device, metadata,
+                                          dict(fields)))
+
 
 LABEL_GETTERS = {
-    "coarse": lambda x:x.coarse,
-    "fine": lambda x:x.fine,
-    "asp": lambda x:x.asp,
-    "pol": lambda x:x.pol,
-    }
+    "coarse": lambda x: x.coarse,
+    "fine": lambda x: x.fine,
+    "asp": lambda x: x.asp,
+    "pol": lambda x: x.pol,
+}
 
-def main():
-  output_dir = "./"
+iterators, dataset_tools = build_iterators(sys.argv[1], 512)
+train_iterator, valid_iterator, test_iterator = iterators
 
-  ((train_iterator, valid_iterator, test_iterator),
-      dataset_tools) = build_iterators(sys.argv[1], 16)
+for label in LabelSet.REVIEW_LABELS:
+  print(label)
+  field = dataset_tools.field_map[label]
+  output_dim = len(field.vocab.stoi)
+  print(field.vocab.stoi)
+  model = classification_lib.BERTGRUClassifier(dataset_tools.device, output_dim)
+  model.to(dataset_tools.device)
 
-  #for i in train_iterator:
-  #  print(i.text)
-  #  print(i.coarse)
-  #  print()
+  optimizer = optim.Adam(model.parameters())
+  #criterion = nn.BCEWithLogitsLoss()
+  criterion = nn.CrossEntropyLoss()
+  #criterion = nn.BCELoss()
 
-  for label in LabelSet.REVIEW_LABELS:
-    field = dataset_tools.fields[label]
-    output_dim = len(field.vocab.stoi)
-    print(field.vocab.stoi)
-    model = simple_classification.BERTGRUSentiment(dataset_tools.device, 
-        output_dim, LABEL_GETTERS[label])
-    model.to(dataset_tools.device)
+  for epoch in range(20):
 
-    optimizer = optim.Adam(model.parameters())
-    criterion = nn.BCEWithLogitsLoss()
+    print(len(train_iterator))
+    this_epoch_data = classification_lib.do_epoch(model, train_iterator,
+                                                  criterion,
+                                                  LABEL_GETTERS[label],
+                                                  output_dim,
+                                                  optimizer, valid_iterator)
 
-    for epoch in range(20):
-      
-      this_epoch_data = ws_classification.do_epoch(model, train_iterator, criterion, optimizer,
-          valid_iterator)
-
-      ws_classification.report_epoch(epoch, this_epoch_data)
-
-
-
-
-if __name__ == "__main__":
-  main()
+    classification_lib.report_epoch(epoch, this_epoch_data)

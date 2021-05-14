@@ -90,7 +90,7 @@ def my_dataset_stuff(device, tokenizer):
 
 class BERTGRUSentiment(nn.Module):
 
-  def __init__(self, device):
+  def __init__(self, device, output_dim=None, label_getter=None):
 
     super().__init__()
 
@@ -104,15 +104,22 @@ class BERTGRUSentiment(nn.Module):
         batch_first=True,
         dropout=0 if Hyperparams.n_layers < 2 else Hyperparams.dropout)
 
+    if output_dim is None:
+      output_dim = Hyperparams.output_dim
     self.out = nn.Linear(
         Hyperparams.hidden_dim *
         2 if Hyperparams.bidirectional else Hyperparams.hidden_dim,
-        Hyperparams.output_dim)
+        output_dim)
     self.dropout = nn.Dropout(Hyperparams.dropout)
 
     for name, param in self.named_parameters():
       if name.startswith('bert'):
         param.requires_grad = False
+
+    if label_getter is None:
+      self.label_getter = lambda x:x.label
+    else:
+      self.label_getter = label_getter
 
   def forward(self, text):
     #text ~ [batch size, sent len]
