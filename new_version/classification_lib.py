@@ -116,19 +116,10 @@ def binary_accuracy(preds, y):
   return sum(correct)
 
 
-def loss_acc_wrapper(batch, predictions, criterion, label_getter, logit_lookup):
-  #new_label = torch.stack([logit_lookup[i.item()] for i in label_getter(batch)
-  #                         ]).to(predictions.device)
-  return (criterion(predictions,
-    #nn.functional.one_hot(label_getter(batch).to(torch.int64),
-    label_getter(batch)
-    #len(logit_lookup))
-                    #new_label
-                    ), 0.0) 
-                    #binary_accuracy(predictions,
-                    #                            label_getter(batch)))
+def loss_acc_wrapper(predictions, labels, criterion):
+  return criterion(predictions, labels), binary_accuracy(predictions, labels)
 
-
+  
 def train_or_evaluate(model,
                       iterator,
                       criterion,
@@ -139,8 +130,8 @@ def train_or_evaluate(model,
   assert mode in "train evaluate".split()
   is_train = mode == "train"
 
-  epoch_loss = 0
-  epoch_acc = 0
+  epoch_loss = 0.0
+  epoch_acc = 0.0
   example_counter = 0
 
   print("Gonna do an epoch ", mode)
@@ -161,10 +152,8 @@ def train_or_evaluate(model,
         optimizer.zero_grad()
 
       predictions = model(batch.text).squeeze(1)
-      print("getting loss")
-      loss, acc = loss_acc_wrapper(batch, predictions, criterion, label_getter,
-          logit_lookup)
-      print("got loss")
+      labels = label_getter(batch)
+      loss, acc = loss_acc_wrapper(predictions, labels, criterion)
 
       if is_train:
         loss.backward()
@@ -172,6 +161,7 @@ def train_or_evaluate(model,
 
       epoch_loss += loss.item() * len(predictions)
       epoch_acc += acc.item()
+      print(epoch_loss, example_counter)
 
   if not example_counter:
     return 999999.9, 999999.9

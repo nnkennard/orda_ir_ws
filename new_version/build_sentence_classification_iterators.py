@@ -86,7 +86,7 @@ def build_iterators(data_dir, batch_size):
               'w') as f:
       writer = csv.DictWriter(f, FIELDS)
       writer.writeheader()
-      for example in review_sentence_examples:
+      for example in review_sentence_examples[:10]:
         writer.writerow(example)
 
   tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -105,7 +105,7 @@ def build_iterators(data_dir, batch_size):
       pad_token=metadata.pad_token_idx,
       unk_token=metadata.unk_token_idx)
   label_fields = [(field_name,
-                   data.LabelField(dtype=torch.int,
+                   data.LabelField(dtype=torch.long,
                                    use_vocab=True,
                                    sequential=False))
                   for field_name in LabelSet.REVIEW_LABELS]
@@ -147,10 +147,8 @@ iterators, dataset_tools = build_iterators(sys.argv[1], 512)
 train_iterator, valid_iterator, test_iterator = iterators
 
 for label in LabelSet.REVIEW_LABELS:
-  print(label)
   field = dataset_tools.field_map[label]
   output_dim = len(field.vocab.stoi)
-  print(field.vocab.stoi)
   model = classification_lib.BERTGRUClassifier(dataset_tools.device, output_dim)
   model.to(dataset_tools.device)
 
@@ -159,9 +157,7 @@ for label in LabelSet.REVIEW_LABELS:
   criterion = nn.CrossEntropyLoss()
   #criterion = nn.BCELoss()
 
-  for epoch in range(20):
-
-    print(len(train_iterator))
+  for epoch in range(500):
     this_epoch_data = classification_lib.do_epoch(model, train_iterator,
                                                   criterion,
                                                   LABEL_GETTERS[label],
