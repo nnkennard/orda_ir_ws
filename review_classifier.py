@@ -153,7 +153,7 @@ def main():
   label = sys.argv[2]
   field = dataset_tools.field_map[label]
   output_dim = len(field.vocab.stoi)
-  model = classification_lib.BERTGRUClassifier(dataset_tools.device, output_dim)
+  model = classification_lib.BERTClassifier(dataset_tools.device, output_dim)
   model.to(dataset_tools.device)
   model_save_name = 'model-{}.pt'.format(label)
 

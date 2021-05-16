@@ -61,7 +61,7 @@ class DatasetTools(object):
     self.field_map = field_map
 
 
-class BERTGRUClassifier(nn.Module):
+class BERTClassifier(nn.Module):
 
   def __init__(self, device, output_dim=None):
 
@@ -72,7 +72,7 @@ class BERTGRUClassifier(nn.Module):
     self.device = device
     if output_dim is None:
       output_dim = Hyperparams.output_dim
-    self.out = nn.Linear(768, hidden_size)
+    self.out = nn.Linear(hidden_size, output_dim)
     self.dropout = nn.Dropout(Hyperparams.dropout)
 
     for name, param in self.named_parameters():
