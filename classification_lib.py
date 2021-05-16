@@ -17,7 +17,7 @@ class Hyperparams(object):
   dropout = 0.25
   n_epochs = 100
   batch_size = 128
-  patience = 20
+  patience = 100
 
 class TokenizerMetadata(object):
 
@@ -79,9 +79,17 @@ class BERTGRUClassifier(nn.Module):
 
     if output_dim is None:
       output_dim = Hyperparams.output_dim
-    self.out = nn.Linear(
-        Hyperparams.hidden_dim *
-        2 if Hyperparams.bidirectional else Hyperparams.hidden_dim, output_dim)
+
+
+    self.fc1 = torch.nn.Linear(768, Hyperparams.hidden_dim)
+    self.relu = torch.nn.ReLU()
+    self.fc2 = torch.nn.Linear(Hyperparams.hidden_dim, Hyperparams.hidden_dim)
+
+    #self.out = nn.Linear(
+    #    Hyperparams.hidden_dim *
+    #    2 if Hyperparams.bidirectional else Hyperparams.hidden_dim, output_dim)
+
+    self.out = nn.Linear(Hyperparams.hidden_dim, output_dim)
     self.dropout = nn.Dropout(Hyperparams.dropout)
 
     for name, param in self.named_parameters():
@@ -95,17 +103,17 @@ class BERTGRUClassifier(nn.Module):
       embedded = self.bert(text)[0]
       #embedded ~ [batch size, sent len, emb dim]
 
-    _, hidden = self.rnn(embedded)
-    #hidden ~ [n layers * n directions, batch size, emb dim]
+    cls_embeddings = embedded[:,0,:]
 
-    if self.rnn.bidirectional:
-      hidden = self.dropout(
-          torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1))
-    else:
-      hidden = self.dropout(hidden[-1, :, :])
-      #hidden ~ [batch size, hid dim]
 
-    output = self.out(hidden)
+    hidden = self.fc1(cls_embeddings)
+    relu = self.relu(hidden)
+    hidden2 = self.fc2(relu)
+    relu = self.relu(hidden2)
+    output = self.out(relu)
+    print(output.shape)
+
+    #output = self.out(cls_embeddings)
     #output ~ [batch size, out dim]
 
     return output

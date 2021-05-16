@@ -86,7 +86,7 @@ def build_iterators(data_dir, batch_size):
               'w') as f:
       writer = csv.DictWriter(f, FIELDS)
       writer.writeheader()
-      for example in review_sentence_examples[:10]:
+      for example in review_sentence_examples:
         writer.writerow(example)
 
   tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -172,7 +172,6 @@ def main():
     classification_lib.report_epoch(epoch, this_epoch_data)
 
     if this_epoch_data.val_loss < best_valid_loss:
-      print("Best loss", this_epoch_data.val_loss, this_epoch_data.val_acc)
       best_valid_loss = this_epoch_data.val_loss
       torch.save(model.state_dict(), model_save_name)
       best_valid_epoch = epoch

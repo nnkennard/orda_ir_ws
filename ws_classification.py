@@ -17,7 +17,7 @@ import classification_lib
 parser = argparse.ArgumentParser(description='prepare CSVs for ws training')
 parser.add_argument('-d',
                     '--datadir',
-                    default="data_0.1.3/ws/",
+                    default="data/data_0.1.3/ws/",
                     type=str,
                     help='path to data file containing score jsons')
 
