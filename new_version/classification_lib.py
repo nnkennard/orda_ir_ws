@@ -10,14 +10,14 @@ from contextlib import nullcontext
 
 
 class Hyperparams(object):
-  hidden_dim = 256
+  hidden_dim = 512
   output_dim = 2
   n_layers = 2
   bidirectional = True
   dropout = 0.25
   n_epochs = 100
   batch_size = 128
-
+  patience = 20
 
 class TokenizerMetadata(object):
 
@@ -134,7 +134,6 @@ def train_or_evaluate(model,
   epoch_acc = 0.0
   example_counter = 0
 
-  print("Gonna do an epoch ", mode)
   if is_train:
     model.train()
     context = nullcontext()
@@ -161,7 +160,6 @@ def train_or_evaluate(model,
 
       epoch_loss += loss.item() * len(predictions)
       epoch_acc += acc.item()
-      print(epoch_loss, example_counter)
 
   if not example_counter:
     return 999999.9, 999999.9

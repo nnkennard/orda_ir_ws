@@ -86,7 +86,7 @@ def build_iterators(data_dir, batch_size):
               'w') as f:
       writer = csv.DictWriter(f, FIELDS)
       writer.writeheader()
-      for example in review_sentence_examples[:10]:
+      for example in review_sentence_examples:
         writer.writerow(example)
 
   tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -110,7 +110,7 @@ def build_iterators(data_dir, batch_size):
                                    sequential=False))
                   for field_name in LabelSet.REVIEW_LABELS]
 
-  fields = [('id', RAW), ('text', TEXT)] + label_fields[:1]
+  fields = [('id', RAW), ('text', TEXT)] + label_fields
 
   train_file_name = "".join([ExampleType.ReviewSentence, "_train.csv"])
   train_obj, valid_obj, test_obj = data.TabularDataset.splits(
@@ -125,7 +125,10 @@ def build_iterators(data_dir, batch_size):
   for name, field in fields:
     if name in ['id']:
       continue
+    print(name)
     field.build_vocab(train_obj, valid_obj, test_obj)
+    #field.build_vocab(train_obj)
+    print(len(field.vocab.stoi))
 
   return (data.BucketIterator.splits((train_obj, valid_obj, test_obj),
                                      batch_size=batch_size,
@@ -157,7 +160,7 @@ for label in LabelSet.REVIEW_LABELS:
   criterion = nn.CrossEntropyLoss()
   #criterion = nn.BCELoss()
 
-  for epoch in range(500):
+  for epoch in range(1000):
     this_epoch_data = classification_lib.do_epoch(model, train_iterator,
                                                   criterion,
                                                   LABEL_GETTERS[label],
