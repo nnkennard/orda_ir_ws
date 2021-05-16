@@ -86,7 +86,7 @@ def build_iterators(data_dir, batch_size):
               'w') as f:
       writer = csv.DictWriter(f, FIELDS)
       writer.writeheader()
-      for example in review_sentence_examples:
+      for example in review_sentence_examples[:10]:
         writer.writerow(example)
 
   tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
