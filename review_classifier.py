@@ -86,7 +86,7 @@ def build_iterators(data_dir, batch_size):
               'w') as f:
       writer = csv.DictWriter(f, FIELDS)
       writer.writeheader()
-      for example in review_sentence_examples:
+      for example in review_sentence_examples[:10]:
         writer.writerow(example)
 
   tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -125,10 +125,7 @@ def build_iterators(data_dir, batch_size):
   for name, field in fields:
     if name in ['id']:
       continue
-    print(name)
     field.build_vocab(train_obj, valid_obj, test_obj)
-    #field.build_vocab(train_obj)
-    print(len(field.vocab.stoi))
 
   return (data.BucketIterator.splits((train_obj, valid_obj, test_obj),
                                      batch_size=batch_size,
@@ -146,19 +143,25 @@ LABEL_GETTERS = {
     "pol": lambda x: x.pol,
 }
 
-iterators, dataset_tools = build_iterators(sys.argv[1], 512)
-train_iterator, valid_iterator, test_iterator = iterators
 
-for label in LabelSet.REVIEW_LABELS:
+
+def main():
+
+  iterators, dataset_tools = build_iterators(sys.argv[1], 512)
+  train_iterator, valid_iterator, test_iterator = iterators
+
+  label = sys.argv[2]
   field = dataset_tools.field_map[label]
   output_dim = len(field.vocab.stoi)
   model = classification_lib.BERTGRUClassifier(dataset_tools.device, output_dim)
   model.to(dataset_tools.device)
+  model_save_name = 'model-{}.pt'.format(label)
 
   optimizer = optim.Adam(model.parameters())
-  #criterion = nn.BCEWithLogitsLoss()
   criterion = nn.CrossEntropyLoss()
-  #criterion = nn.BCELoss()
+
+  best_valid_loss = float('inf')
+  best_valid_epoch = None
 
   for epoch in range(1000):
     this_epoch_data = classification_lib.do_epoch(model, train_iterator,
@@ -166,5 +169,25 @@ for label in LabelSet.REVIEW_LABELS:
                                                   LABEL_GETTERS[label],
                                                   output_dim,
                                                   optimizer, valid_iterator)
-
     classification_lib.report_epoch(epoch, this_epoch_data)
+
+    if this_epoch_data.val_loss < best_valid_loss:
+      print("Best loss", this_epoch_data.val_loss, this_epoch_data.val_acc)
+      best_valid_loss = this_epoch_data.val_loss
+      torch.save(model.state_dict(), model_save_name)
+      best_valid_epoch = epoch
+
+    if best_valid_epoch < (epoch - classification_lib.Hyperparams.patience):
+      break
+  
+  model.load_state_dict(torch.load(model_save_name))
+
+  #val_loss, val_acc = train_or_evaluate(model, valid_iterator, criterion,
+   #                                     "evaluate")
+
+  print("Best validation loss,", best_valid_loss)
+
+
+
+if __name__ == "__main__":
+  main()
