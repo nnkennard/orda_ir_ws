@@ -68,28 +68,11 @@ class BERTGRUClassifier(nn.Module):
     super().__init__()
 
     self.bert = BertModel.from_pretrained('bert-base-uncased')
+    hidden_size = self.bert.config.to_dict()['hidden_size']
     self.device = device
-    self.rnn = nn.GRU(
-        self.bert.config.to_dict()['hidden_size'],
-        Hyperparams.hidden_dim,
-        num_layers=Hyperparams.n_layers,
-        bidirectional=Hyperparams.bidirectional,
-        batch_first=True,
-        dropout=0 if Hyperparams.n_layers < 2 else Hyperparams.dropout)
-
     if output_dim is None:
       output_dim = Hyperparams.output_dim
-
-
-    self.fc1 = torch.nn.Linear(768, Hyperparams.hidden_dim)
-    self.relu = torch.nn.ReLU()
-    self.fc2 = torch.nn.Linear(Hyperparams.hidden_dim, Hyperparams.hidden_dim)
-
-    #self.out = nn.Linear(
-    #    Hyperparams.hidden_dim *
-    #    2 if Hyperparams.bidirectional else Hyperparams.hidden_dim, output_dim)
-
-    self.out = nn.Linear(Hyperparams.hidden_dim, output_dim)
+    self.out = nn.Linear(768, hidden_size)
     self.dropout = nn.Dropout(Hyperparams.dropout)
 
     for name, param in self.named_parameters():
@@ -97,26 +80,13 @@ class BERTGRUClassifier(nn.Module):
         param.requires_grad = False
 
   def forward(self, text):
-    #text ~ [batch size, sent len]
 
     with torch.no_grad():
-      embedded = self.bert(text)[0]
-      #embedded ~ [batch size, sent len, emb dim]
+      embedded = self.bert(text).last_hidden_state
 
     cls_embeddings = embedded[:,0,:]
-
-
-    hidden = self.fc1(cls_embeddings)
-    relu = self.relu(hidden)
-    hidden2 = self.fc2(relu)
-    relu = self.relu(hidden2)
-    output = self.out(relu)
-    print(output.shape)
-
-    #output = self.out(cls_embeddings)
-    #output ~ [batch size, out dim]
-
-    return output
+    output = self.dropout(cls_embeddings)
+    return self.out(output)
 
 
 def binary_accuracy(preds, y):
