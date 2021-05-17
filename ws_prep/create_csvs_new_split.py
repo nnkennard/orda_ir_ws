@@ -171,7 +171,8 @@ def main():
       writer = csv.DictWriter(g, FIELDS)
       writer.writeheader()
       for i, example in enumerate(examples):
-        writer.writerow(example)
+        if random.choice(range(10)) == 6:
+          writer.writerow(example)
 
 
 

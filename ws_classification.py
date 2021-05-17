@@ -104,9 +104,20 @@ def main():
   optimizer = optim.Adam(model.parameters())
   criterion = nn.CrossEntropyLoss()
 
+  all_train_iterator, all_valid_iterator, = build_iterators(
+      args.datadir, "all_train.csv", dataset_tools,
+      classification_lib.Hyperparams.batch_size)
+
+  model_save_name = "ws_ir_model.pt"
+  best_valid_loss = float('inf')
+  best_valid_epoch = None
+
+  patience = 5
+
   for epoch in range(100):
     for train_file in tqdm(sorted(glob.glob(args.datadir+"/*train.csv"))[:10]):
-      print(train_file)
+      if 'all' in train_file:
+        continue
       train_file_name = train_file.split('/')[-1]
 
       train_iterator, valid_iterator, = build_iterators(
@@ -117,13 +128,21 @@ def main():
         model, train_iterator, criterion, lambda x:x.label, 2, optimizer,
           valid_iterator)
 
-      classification_lib.report_epoch(epoch, this_epoch_data)
+    this_epoch_data = classification_lib.do_epoch(
+      model, all_train_iterator, criterion, lambda x:x.label, 2,
+      optimizer, all_valid_iterator, eval_both=True)
+    classification_lib.report_epoch(epoch, this_epoch_data)
 
-      #if this_epoch_data.val_loss < best_valid_loss:
-      #  best_valid_loss = this_epoch_data.val_loss
-      #  torch.save(model.state_dict(), 'tut6-model.pt')
+    if this_epoch_data.val_loss < best_valid_loss:
+      print("Best validation loss; saving model from epoch ", epoch)
+      best_valid_loss = this_epoch_data.val_loss
+      torch.save(model.state_dict(), model_save_name)
+      best_valid_epoch = epoch
 
-    #model.load_state_dict(torch.load('tut6-model.pt'))
+    if best_valid_epoch < (epoch - patience):
+      break
+  
+  model.load_state_dict(torch.load('tut6-model.pt'))
 
 
 

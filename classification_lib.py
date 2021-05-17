@@ -168,11 +168,15 @@ class EpochData(object):
 
 
 def do_epoch(model, train_iterator, criterion, label_getter, output_dim, optimizer,
-             valid_iterator):
+             valid_iterator, eval_both=False):
 
   start_time = time.time()
+  if eval_both:
+    train_set_mode = "evaluate"
+  else:
+    train_set_mode = "train"
   train_loss, train_acc = train_or_evaluate(model, train_iterator, criterion,
-                                            label_getter, output_dim, "train", optimizer)
+                                            label_getter, output_dim, train_set_mode, optimizer)
   valid_loss, valid_acc = train_or_evaluate(model, valid_iterator, criterion,
                                             label_getter, output_dim, "evaluate")
   end_time = time.time()
