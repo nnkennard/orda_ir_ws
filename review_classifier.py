@@ -17,9 +17,9 @@ class LabelSet(object):
   Fine = "fine"
   Polarity = "pol"
   Aspect = "asp"
-  Relation = "relation"
+  #Relation = "relation"
 
-  ALL = [Coarse, Fine, Polarity, Aspect, Relation]  # Add no label labels??
+  #ALL = [Coarse, Fine, Polarity, Aspect, Relation]  # Add no label labels??
   REVIEW_LABELS = [Coarse, Fine, Polarity, Aspect]
 
 
@@ -70,24 +70,25 @@ class ExampleType(object):
 def build_iterators(data_dir, batch_size):
 
   # Form csv files
-  offset = 0
-  for subset in Subset.ALL:
-    glob_path = "/".join([data_dir, "traindev_" + subset, "*.json"])
-    review_sentence_examples = []
-    rebuttal_sentence_examples = []
-    FIELDS = "id sentence".split() + LabelSet.REVIEW_LABELS
-    for filename in glob.glob(glob_path):
-      with open(filename, 'r') as f:
-        example_obj = json.load(f)
-        review_sentence_examples += create_review_sentence_examples(
-            example_obj, offset)
-        offset += len(example_obj[REVIEW])
-    with open("".join([ExampleType.ReviewSentence, "_", subset, ".csv"]),
-              'w') as f:
-      writer = csv.DictWriter(f, FIELDS)
-      writer.writeheader()
-      for example in review_sentence_examples[:10]:
-        writer.writerow(example)
+  #offset = 0
+  #for subset in Subset.ALL:
+  #  glob_path = "/".join([data_dir, "traindev_" + subset, "*.json"])
+  #  review_sentence_examples = []
+  #  rebuttal_sentence_examples = []
+  #  FIELDS = "id sentence".split() + LabelSet.REVIEW_LABELS
+  #  for filename in glob.glob(glob_path):
+  #    with open(filename, 'r') as f:
+  #      example_obj = json.load(f)
+  #      review_sentence_examples += create_review_sentence_examples(
+  #          example_obj, offset)
+  #      offset += len(example_obj[REVIEW])
+  #  with open("".join([ExampleType.ReviewSentence, "_", subset, ".csv"]),
+  #            'w') as f:
+  #    writer = csv.DictWriter(f, FIELDS)
+  #    writer.writeheader()
+  #    #print(subset, len(review_sentence_examples))
+  #    for example in review_sentence_examples:
+  #      writer.writerow(example)
 
   tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -112,7 +113,7 @@ def build_iterators(data_dir, batch_size):
 
   fields = [('id', RAW), ('text', TEXT)] + label_fields
 
-  train_file_name = "".join([ExampleType.ReviewSentence, "_train.csv"])
+  train_file_name = "".join([ExampleType.ReviewSentence, "_train_clean.csv"])
   train_obj, valid_obj, test_obj = data.TabularDataset.splits(
       path="./",
       train=train_file_name,
@@ -130,6 +131,7 @@ def build_iterators(data_dir, batch_size):
   return (data.BucketIterator.splits((train_obj, valid_obj, test_obj),
                                      batch_size=batch_size,
                                      device=device,
+                                      shuffle=True,
                                      sort_key=lambda x: x.id,
                                      sort_within_batch=False),
           classification_lib.DatasetTools(tokenizer, device, metadata,
@@ -147,22 +149,30 @@ LABEL_GETTERS = {
 
 def main():
 
-  iterators, dataset_tools = build_iterators(sys.argv[1], 512)
+  iterators, dataset_tools = build_iterators(sys.argv[1], batch_size=512)
   train_iterator, valid_iterator, test_iterator = iterators
 
   label = sys.argv[2]
   field = dataset_tools.field_map[label]
   output_dim = len(field.vocab.stoi)
-  model = classification_lib.BERTClassifier(dataset_tools.device, output_dim)
+  
+  print(field.vocab.stoi)
+  print("output dim")
+  print(output_dim)
+  model = classification_lib.BERTClassifier(dataset_tools.device, output_dim=7)
   model.to(dataset_tools.device)
   model_save_name = 'model-{}.pt'.format(label)
 
-  optimizer = optim.Adam(model.parameters())
+  #optimizer = optim.Adam(model.parameters())
+  #import pdb
+  #pdb.set_trace()
+  optimizer = optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=5e-5)
   criterion = nn.CrossEntropyLoss()
 
   best_valid_loss = float('inf')
   best_valid_epoch = None
 
+  
   for epoch in range(1000):
     this_epoch_data = classification_lib.do_epoch(model, train_iterator,
                                                   criterion,

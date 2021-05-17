@@ -19,7 +19,7 @@ class Hyperparams(object):
   dropout = 0.25
   n_epochs = 100
   batch_size = 128
-  patience = 100
+  patience = 1000
 
 class TokenizerMetadata(object):
 
@@ -83,12 +83,14 @@ class BERTClassifier(nn.Module):
 
   def forward(self, text):
 
-    with torch.no_grad():
-      embedded = self.bert(text).last_hidden_state
+    #with torch.no_grad():
+    #  embedded = self.bert(text).last_hidden_state
+    embedded = self.bert(text)[0]
 
     cls_embeddings = embedded[:,0,:]
     output = self.dropout(cls_embeddings)
     return self.out(output)
+    #return self.out(cls_embeddings)
 
 
 def binary_accuracy(preds, y):
@@ -97,6 +99,7 @@ def binary_accuracy(preds, y):
 
 
 def loss_acc_wrapper(predictions, labels, criterion):
+
   return criterion(predictions, labels), binary_accuracy(predictions, labels)
 
   
@@ -108,6 +111,7 @@ def train_or_evaluate(model,
                       mode,
                       optimizer=None):
   assert mode in "train evaluate".split()
+  
   is_train = mode == "train"
 
   epoch_loss = 0.0
@@ -126,8 +130,10 @@ def train_or_evaluate(model,
 
   with context:
     for batch in iterator:
-      example_counter += len(batch)
+      #example_counter += len(batch)
       if is_train:
+        #import pdb
+        #pdb.set_trace()
         optimizer.zero_grad()
 
       predictions = model(batch.text).squeeze(1)
@@ -138,12 +144,13 @@ def train_or_evaluate(model,
         loss.backward()
         optimizer.step()
 
-      epoch_loss += loss.item() * len(predictions)
+
+      epoch_loss += loss.item() #* len(predictions)
       epoch_acc += acc.item()
 
-  if not example_counter:
-    return 999999.9, 999999.9
-  return epoch_loss / example_counter, epoch_acc / example_counter
+  #if not example_counter:
+  #  return 999999.9, 999999.9
+  return epoch_loss, epoch_acc
 
 
 class EpochData(object):
@@ -182,4 +189,53 @@ def report_epoch(epoch, epoch_data):
          f'{epoch_data.val_acc*100:.2f}%'))
 
 
-# Need iterator builders
+class BERTGRUClassifier(nn.Module):
+
+  def __init__(self, device):
+
+    super().__init__()
+
+    self.bert = BertModel.from_pretrained('bert-base-uncased')
+    self.device = device
+
+    self.rnn = nn.GRU(
+        self.bert.config.to_dict()['hidden_size'],
+        Hyperparams.hidden_dim,
+        num_layers=Hyperparams.n_layers,
+        bidirectional=Hyperparams.bidirectional,
+        batch_first=True,
+        dropout=0 if Hyperparams.n_layers < 2 else Hyperparams.dropout)
+
+    self.out = nn.Linear(
+        Hyperparams.hidden_dim *
+        2 if Hyperparams.bidirectional else Hyperparams.hidden_dim,
+        Hyperparams.output_dim)
+    self.dropout = nn.Dropout(Hyperparams.dropout)
+
+    for name, param in self.named_parameters():
+      if name.startswith('bert'):
+        param.requires_grad = False
+
+  def forward(self, text):
+    #text = [batch size, sent len]
+
+    with torch.no_grad():
+      embedded = self.bert(text)[0]
+      #embedded ~ [batch size, sent len, emb dim]
+
+    _, hidden = self.rnn(embedded)
+    #hidden ~ [n layers * n directions, batch size, emb dim]
+
+
+    if self.rnn.bidirectional:
+      hidden = self.dropout(
+          torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1))
+    else:
+      hidden = self.dropout(hidden[-1, :, :])
+      #hidden = [batch size, hid dim]
+
+    output = self.out(hidden)
+    #output = [batch size, out dim]
+
+    return output
+

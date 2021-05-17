@@ -52,6 +52,7 @@ def generate_text_field(tokenizer):
 
 
 def get_dataset_tools(data_dir):
+  print("Starting")
   tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   metadata = classification_lib.TokenizerMetadata(tokenizer)
@@ -104,7 +105,7 @@ def main():
   criterion = nn.CrossEntropyLoss()
 
   for epoch in range(100):
-    for train_file in tqdm(sorted(glob.glob(args.datadir+"/*train.csv"))):
+    for train_file in tqdm(sorted(glob.glob(args.datadir+"/*train.csv"))[:10]):
       print(train_file)
       train_file_name = train_file.split('/')[-1]
 
