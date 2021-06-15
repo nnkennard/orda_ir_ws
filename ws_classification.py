@@ -108,14 +108,14 @@ def main():
       args.datadir, "all_train.csv", dataset_tools,
       classification_lib.Hyperparams.batch_size)
 
-  model_save_name = "ws_ir_model.pt"
+  model_save_name = "ws_ir_model_2.pt"
   best_valid_loss = float('inf')
   best_valid_epoch = None
 
   patience = 5
 
   for epoch in range(100):
-    for train_file in tqdm(sorted(glob.glob(args.datadir+"/*train.csv"))[:10]):
+    for train_file in tqdm(sorted(glob.glob(args.datadir+"/*train.csv"))):
       if 'all' in train_file:
         continue
       train_file_name = train_file.split('/')[-1]
@@ -142,9 +142,6 @@ def main():
     if best_valid_epoch < (epoch - patience):
       break
   
-  model.load_state_dict(torch.load('tut6-model.pt'))
-
-
 
 if __name__ == "__main__":
   main()

@@ -63,36 +63,6 @@ class DatasetTools(object):
     self.field_map = field_map
 
 
-class BERTClassifier(nn.Module):
-
-  def __init__(self, device, output_dim=None):
-
-    super().__init__()
-
-    self.bert = BertModel.from_pretrained('bert-base-uncased')
-    hidden_size = self.bert.config.to_dict()['hidden_size']
-    self.device = device
-    if output_dim is None:
-      output_dim = Hyperparams.output_dim
-    self.out = nn.Linear(hidden_size, output_dim)
-    self.dropout = nn.Dropout(Hyperparams.dropout)
-
-    for name, param in self.named_parameters():
-      if name.startswith('bert'):
-        param.requires_grad = False
-
-  def forward(self, text):
-
-    #with torch.no_grad():
-    #  embedded = self.bert(text).last_hidden_state
-    embedded = self.bert(text)[0]
-
-    cls_embeddings = embedded[:,0,:]
-    output = self.dropout(cls_embeddings)
-    return self.out(output)
-    #return self.out(cls_embeddings)
-
-
 def binary_accuracy(preds, y):
   correct = (torch.argmax(preds, 1) == y).float()
   return sum(correct)
@@ -126,14 +96,10 @@ def train_or_evaluate(model,
     model.eval()
     context = torch.no_grad()
 
-  logit_lookup = torch.Tensor(np.eye(output_dim)).to(model.device)
-
   with context:
     for batch in iterator:
-      #example_counter += len(batch)
+      example_counter += len(batch)
       if is_train:
-        #import pdb
-        #pdb.set_trace()
         optimizer.zero_grad()
 
       predictions = model(batch.text).squeeze(1)
@@ -145,12 +111,12 @@ def train_or_evaluate(model,
         optimizer.step()
 
 
-      epoch_loss += loss.item() #* len(predictions)
+      epoch_loss += loss.item() *  len(predictions)
       epoch_acc += acc.item()
 
-  #if not example_counter:
-  #  return 999999.9, 999999.9
-  return epoch_loss, epoch_acc
+  if not example_counter:
+    return 999999.9, 999999.9
+  return epoch_loss/example_counter , epoch_acc / example_counter
 
 
 class EpochData(object):

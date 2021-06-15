@@ -9,10 +9,11 @@ import sys
 import random
 from tqdm import tqdm
 
+
 parser = argparse.ArgumentParser(description='prepare CSVs for ws training')
 parser.add_argument('-d',
                     '--datadir',
-                    default="../data/data_0.1.3/ws/",
+                    default="../0517_split_2/train/",
                     type=str,
                     help='path to data file containing score jsons')
 
@@ -21,6 +22,7 @@ random.seed(34)
 POS = "1_more_relevant"
 NEG = "2_more_relevant"
 
+#FIELDS = "id label d1 d2 q".split()
 FIELDS = "id label text".split()
 
 SAMPLES_PER_SENTENCE = 5
@@ -84,31 +86,49 @@ def build_overall_vocab(sentences):
     fake_sentences.append(" ".join(vocab[start_index:start_index +
       100]).replace('\0', ""))
   return fake_sentences
-
-def get_sentences_to_avoid(test_path):
-  print(test_path)
-  test_start_sentences = []
-  for filename in glob.glob(test_path + "/*"):
-    with open(filename, 'r') as f:
-      obj = json.load(f)
-      test_start_sentences.append(obj["review"][1]["sentence"])
-  return test_start_sentences
-    
   
 def main():
 
   args = parser.parse_args()
 
-  assert args.datadir.endswith('/ws/')
+  assert args.datadir.endswith('/train/')
 
   overall_builders = {"d": [], "q": []}
 
-  all_samples = {"train": [], "dev":[]}
 
-  all_filenames = glob.glob(args.datadir + "/*.json")
+  examples = []
+  for filename in glob.glob(args.datadir + "/*.json"):
+    with open(filename, 'r') as f:
+      obj = json.load(f)
+    review_sentences = [sent["sentence"] for sent in obj["review"]]
+    rebuttal_sentences = [sent["sentence"] for sent in obj["rebuttal"]]
+    aligned_sentences = [s["labels"]["alignments"]
+                          for s in obj["rebuttallabels"]]
+    for reb_sent, aligned in zip(rebuttal_sentences, aligned_sentences):
+      if not aligned:
+        continue
+      else:
+        for pos_idx in aligned:
+          for neg_idx in range(len(review_sentences)):
+            if neg_idx in aligned:
+              continue
+            examples.append({
+              "q": reb_sent,
+              "d1": review_sentences[pos_idx],
+              "d2": review_sentences[neg_idx],
+              label = POS,
+            })
+             examples.append({
+              "q": reb_sent,
+              "d1": review_sentences[neg_idx],
+              "d2": review_sentences[pos_idx],
+              label = NEG,
+            })
+            
 
-  test_start_sentences = get_sentences_to_avoid(
-      args.datadir + "../../05-16-emnlp-release-split/test")
+    
+
+
 
   for batch_i, input_file_start_index in enumerate(tqdm(range(0, len(all_filenames),
     PAIRS_PER_FILE))):
@@ -121,15 +141,9 @@ def main():
       with open(filename, 'r') as f:
         data_obj = json.load(f)
 
-      if len(data_obj["review"]) < 2 or data_obj["review"][1] in test_start_sentences:
-        print("Skipping ", batch_i)
-        continue
-
       overall_builders["d"] += data_obj["review"]
       overall_builders["q"] += data_obj["rebuttal"]
-      my_samples = sample_things(data_obj)
-      sample_builder[subset] += my_samples
-      all_samples[subset] += my_samples
+      sample_builder[subset] += sample_things(data_obj)
 
     for subset, examples in sample_builder.items():
       output_file = "".join([
@@ -164,17 +178,6 @@ def main():
           {"id": i,
             "text": " [SEP] ".join([d1, d2, q]),
             "label": label})
-
-  for subset, examples in all_samples.items():
-    output_file = "".join([
-      args.datadir, "all_", subset,  ".csv"])
-    with open(output_file, 'w') as g:
-      writer = csv.DictWriter(g, FIELDS)
-      writer.writeheader()
-      for i, example in enumerate(examples):
-        if random.choice(range(10)) == 6:
-          writer.writerow(example)
-
 
 
 
